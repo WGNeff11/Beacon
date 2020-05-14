@@ -1,0 +1,84 @@
+select distinct tweets.user_id from tweets where sentiment > 0;
+       user_id       
+---------------------
+              939091
+             7748752
+           224896427
+           255617540
+            25073877
+           116994659
+          2666969059
+ 1093695069176000512
+            35315865
+  820452522494226432
+          1421379786
+          2904169317
+           462021312
+           426909329
+            14499829
+            33152005
+           372755940
+          2426189960
+(18 rows)
+
+select distinct tweets.user_id from tweets where sentiment < 0;
+       user_id       
+---------------------
+              939091
+             7748752
+           224896427
+           255617540
+            25073877
+           116994659
+          2666969059
+            35315865
+ 1093695069176000512
+  820452522494226432
+          1421379786
+          2904169317
+           462021312
+           426909329
+            14499829
+            33152005
+           372755940
+          2426189960
+(18 rows)
+
+select distinct tweets.user_id from tweets where sentiment > 0;
+       user_id       
+---------------------
+              939091
+             7748752
+           224896427
+           255617540
+            25073877
+           116994659
+          2666969059
+ 1093695069176000512
+            35315865
+  820452522494226432
+          1421379786
+          2904169317
+           462021312
+           426909329
+            14499829
+            33152005
+           372755940
+          2426189960
+(18 rows)
+
+select distinct experts.screen_name from experts where experts.followers_count < 100000;
+   screen_name   
+-----------------
+ _HannahRitchie
+ DrTomFrieden
+ BogochIsaac
+ SteveFDA
+ trishgreenhalgh
+ T_Inglesby
+ SueDHellmann
+ robinhanson
+ AidaAlami
+ aetiology
+(10 rows)
+

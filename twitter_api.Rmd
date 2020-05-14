@@ -1,0 +1,114 @@
+---
+title: "coronavirus_twitter"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(rtweet)
+library(RPostgres)
+library(DBI)
+library(dplyr)
+library(RPostgreSQL)
+library(ggmap)
+library(sentimentr)
+library(httr)
+library(jsonlite)
+library(lubridate)
+
+google_key = "AIzaSyCr1pd2Pvv9sabCSnzkdn4KuupK-cWHX1M"
+register_google(key = google_key)
+
+drv <- dbDriver("PostgreSQL")
+con = dbConnect(RPostgres::Postgres(),
+  dbname = "postgres",
+  host = "35.199.36.16",
+  port = "5432",
+  password = "steaksandwich",
+  user = "postgres"
+)
+
+API = create_token(app = "Coronavirus Expert Tracker", consumer_key = "FPX9PAwDiKsxFHjl0yE5koHw0", consumer_secret = "7ilAGLyV5Fo6065GmVXRUFPLmxs40CNfrgD26NdlE90F5n7f6Q", 
+             access_token = "498357991-2x1uoFOlJOmN4S97eX48hEuHnfqzXleA9CI9VLZ2",
+             access_secret = "5aS5Y483XPS3RoWHfCiPVS03Hd4Alhx2s7WEtSL3ztbRC")
+
+experts = c("realDonaldTrump", "robinhanson", "EricRWeinstein", "SamHarrisOrg", "JoeBiden", "SteveFDA", "_HannahRitchie", "CDCDirector", "trvrb", "aetiology", "WHO", "ESYudkowsky", "willwilkinson", "Noahpinion", "tylercowen", "balajis", "CaitlinPacific", "MattHancock", "FutureDocs", "Atul_Gawande", "ScottGottliebMD", "jhalamka", "DavidJuurlink", "JenniferAdaeze")
+
+states = read.csv('state_abbrevs.csv', stringsAsFactors = F)
+```
+
+# Populates the accounts, experts tables
+```{r}
+tmls <- get_timelines(experts, n = 1)
+
+expert_bios = tmls %>% select(user_id, screen_name, name, location, description, profile_url, 
+                profile_image_url, followers_count, statuses_count) %>%
+  mutate(expertise = c("Global Leader", "Academic", "Rationalist", "Rationalist", "Global Leader",
+                       "Global Leader", "Academic", "Global Leader", "Academic", "Academic", 
+                       "Global Leader", "Rationalist", "Journalist", "Journalist", "Academic", "Academic", "Journalist", "Global Leader", "Doctor", "Doctor", "Doctor", "Doctor", "Doctor", "Doctor")) %>% 
+  mutate(user_id = as.numeric(user_id),
+         followers_count = as.numeric(followers_count),
+         statuses_count = as.numeric(statuses_count))
+
+expert_bios = expert_bios %>% mutate(location = ifelse(user_id==116994659|user_id==45659218, 'Los Angeles, CA',
+                                                       ifelse(user_id == 33152005, 'San Francisco, CA', 
+                                                              ifelse(user_id == 2595244026, 'Berkeley, CA',
+                                                                     ifelse(user_id == 8496762, 'Fairfax City, VA', ifelse(user_id == 233364902, 'Boston, MA', location))))))
+
+lat_noise = runif(nrow(expert_bios), -.05, .05)
+lon_noise = runif(nrow(expert_bios), -.05, .05)
+coords = geocode(gsub('[[:punct:] ]+',' ', expert_bios$location), output = "latlona", source = "google")
+expert_bios = expert_bios %>% mutate(lat = coords$lat+lat_noise, long = coords$lon + lon_noise)
+
+dbAppendTable(con, dbQuoteIdentifier(con, "accounts"), expert_bios %>% select(-expertise))
+dbAppendTable(con, dbQuoteIdentifier(con, "experts"), expert_bios %>% select(user_id, expertise))
+```
+
+
+# Populates tweets table
+```{r}
+tweets <- get_timelines(experts, n = 500, include_rts = FALSE)
+
+tweet_insert = tweets %>% select(status_id, user_id, created_at, text, favorite_count, retweet_count) %>% filter(str_detect(text, "https", negate = T))
+
+keywords = c("cov", "coro", "doctor", "med", "disease", "death", "case", "vir", "crisis", "pandemic", "nurse", "social distancing")
+final_insert = tweet_insert %>% filter(str_detect(text, keywords[1]))
+for(i in c(2:length(keywords))){
+  final_insert = rbind(final_insert, (tweet_insert %>% filter(str_detect(text, keywords[i]))))
+}
+final_insert = final_insert  %>% distinct(status_id, .keep_all = T) %>% 
+  mutate(sentiment = sentiment_by(text)$ave_sentiment)
+dbAppendTable(con, dbQuoteIdentifier(con, "tweets"), final_insert)
+```
+
+# Sample tweets from a certain area
+```{r}
+for(i in c(1:nrow(states))){
+  coords <- lookup_coords(paste0(states$State[[i]], ", usa"))
+  tweets = search_tweets("corona OR covid OR doctor OR med OR disease OR death OR case OR vir OR crisis OR pandemic OR nurse OR distancing",n=200,geocode = coords, include_rts = FALSE) %>% mutate(state = states$Code[[i]])
+  if(i ==1){
+    all_tweets = tweets
+  } else{
+  all_tweets <- rbind(all_tweets, tweets)
+  }
+}
+all_tweets = all_tweets %>% mutate(sentiment = sentiment_by(text)$ave_sentiment) %>% select(status_id, user_id, created_at, text, favorite_count, retweet_count, state, sentiment) %>% distinct(status_id, .keep_all = T)
+
+dbAppendTable(con, dbQuoteIdentifier(con, "tweets"), all_tweets)
+```
+# Pull Case Count by State
+```{r}
+for(i in c(1:nrow(states))){
+  raw = GET(paste0('http://coronavirusapi.com/getTimeSeries/', states$Code[[i]]))
+  raw.char <- rawToChar(raw$content)
+  df <- read.table(text = raw.char, sep =",", header = TRUE, stringsAsFactors = FALSE)
+  df = df %>% arrange(desc(tested)) %>% slice(1) %>% mutate(state = states$Code[[i]])
+  if(i == 1){
+    state_cases = df
+  } else{
+    state_cases = rbind(state_cases, df)
+  }
+}
+
+dbAppendTable(con, dbQuoteIdentifier(con, "cases"), state_cases %>% rename(seconds_since_epoch = seconds_since_Epoch))
+```
