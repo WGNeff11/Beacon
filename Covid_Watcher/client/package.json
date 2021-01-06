@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "aos": "^2.3.4",
-    "axios": "^0.19.2",
+    "axios": "^0.21.1",
     "beautify-scrollbar": "^1.0.8",
     "cors": "^2.8.5",
     "highcharts": "^8.0.4",
