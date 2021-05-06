@@ -13,7 +13,7 @@
     "axios": "^0.19.2",
     "beautify-scrollbar": "^1.0.8",
     "cors": "^2.8.5",
-    "highcharts": "^8.0.4",
+    "highcharts": "^9.0.0",
     "highcharts-vue": "^1.3.5",
     "mapbox-gl": "^0.53.1",
     "register-service-worker": "^1.6.2",
